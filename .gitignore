@@ -1,0 +1,7 @@
+# Logs and OS
+.DS_Store
+
+# Local API output
+backend/attendance-data.csv
+
+

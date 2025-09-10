@@ -17,6 +17,33 @@ let availableCameras = [];
 let currentCameraId = null;
 
 const LAST_CAMERA_KEY = "attendance:lastCameraId";
+const HTML5_QRCODE_CDN = "https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js";
+
+function ensureHtml5QrcodeLoaded() {
+  return new Promise((resolve, reject) => {
+    try {
+      if (typeof window !== "undefined" && window.Html5Qrcode) {
+        return resolve();
+      }
+      // Check if a loading script already exists
+      const existing = document.querySelector("script[data-html5-qrcode]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () => reject(new Error("Failed to load html5-qrcode")));
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = HTML5_QRCODE_CDN;
+      s.async = true;
+      s.setAttribute("data-html5-qrcode", "");
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Failed to load html5-qrcode"));
+      document.head.appendChild(s);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
 
 async function openScanner(actionLabel) {
   if (isScanning) return;
@@ -24,6 +51,7 @@ async function openScanner(actionLabel) {
   modalTitleEl.textContent = `Scan QR — ${actionLabel}`;
   modalEl.setAttribute("aria-hidden", "false");
   try {
+    await ensureHtml5QrcodeLoaded();
     await setupCameraPicker();
   } catch (err) {
     console.error("Camera setup failed", err);

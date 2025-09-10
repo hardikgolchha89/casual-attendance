@@ -8,32 +8,48 @@ const modalCloseEl = document.getElementById("scanner-close");
 const modalCancelEl = document.getElementById("scanner-cancel");
 const modalTitleEl = document.getElementById("scanner-title");
 const toastContainer = document.getElementById("toast-container");
+const cameraSelectEl = document.getElementById("camera-select");
 
 let html5QrCode = null;
 let isScanning = false;
 let currentAction = null; // "Check In" | "Check Out"
+let availableCameras = [];
+let currentCameraId = null;
 
-function openScanner(actionLabel) {
+const LAST_CAMERA_KEY = "attendance:lastCameraId";
+
+async function openScanner(actionLabel) {
   if (isScanning) return;
   currentAction = actionLabel;
   modalTitleEl.textContent = `Scan QR — ${actionLabel}`;
   modalEl.setAttribute("aria-hidden", "false");
-  startScanner();
+  try {
+    await setupCameraPicker();
+  } catch (err) {
+    console.error("Camera setup failed", err);
+    showToast("❌ Camera access failed. Check permissions.", "error");
+  }
+  startScanner(currentCameraId);
 }
 
 function closeScanner() {
   stopScanner();
   modalEl.setAttribute("aria-hidden", "true");
+  if (cameraSelectEl) {
+    cameraSelectEl.innerHTML = "";
+  }
 }
 
-function startScanner() {
+function startScanner(cameraId) {
   const qrRegionId = "qr-reader";
   const config = { fps: 10, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, rememberLastUsedCamera: true };
   html5QrCode = new Html5Qrcode(qrRegionId);
   isScanning = true;
 
+  const cameraConfig = cameraId ? cameraId : { facingMode: "environment" };
+
   html5QrCode.start(
-    { facingMode: "environment" },
+    cameraConfig,
     config,
     async (decodedText) => {
       if (!decodedText) return;
@@ -67,7 +83,14 @@ function startScanner() {
     }
   ).catch((err) => {
     console.error("Scanner start failed", err);
-    showToast("❌ Scan failed, please try again.", "error");
+    const msg = String(err || "");
+    if (/NotAllowedError|Permission/i.test(msg)) {
+      showToast("❌ Camera permission denied. Enable it in browser settings.", "error");
+    } else if (/NotFoundError|no camera/i.test(msg)) {
+      showToast("❌ No camera found.", "error");
+    } else {
+      showToast("❌ Scan failed, please try again.", "error");
+    }
     closeScanner();
   });
 }
@@ -82,6 +105,52 @@ function stopScanner() {
   }).catch(() => {
     // no-op
   });
+}
+
+async function setupCameraPicker() {
+  if (!cameraSelectEl) return;
+  try {
+    availableCameras = await Html5Qrcode.getCameras();
+  } catch (err) {
+    // On some browsers, getCameras may require prior permission. We'll still try default camera.
+    availableCameras = [];
+  }
+
+  cameraSelectEl.innerHTML = "";
+  if (availableCameras && availableCameras.length) {
+    const lastId = localStorage.getItem(LAST_CAMERA_KEY);
+    availableCameras.forEach((cam) => {
+      const opt = document.createElement("option");
+      opt.value = cam.id;
+      opt.textContent = cam.label || cam.id;
+      cameraSelectEl.appendChild(opt);
+    });
+    // Choose last used or the first one
+    const selectedId = availableCameras.find(c => c.id === lastId) ? lastId : availableCameras[0].id;
+    cameraSelectEl.value = selectedId;
+    currentCameraId = selectedId;
+  } else {
+    // No list available; fall back to environment selection
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Default camera";
+    cameraSelectEl.appendChild(opt);
+    cameraSelectEl.value = "";
+    currentCameraId = null;
+  }
+
+  cameraSelectEl.onchange = async (e) => {
+    const newId = e.target.value || null;
+    if (newId === currentCameraId) return;
+    currentCameraId = newId;
+    localStorage.setItem(LAST_CAMERA_KEY, newId || "");
+    // Restart scanner with selected camera
+    const wasScanning = isScanning;
+    stopScanner();
+    if (wasScanning) {
+      startScanner(currentCameraId);
+    }
+  };
 }
 
 async function sendToSheets({ workerId, date, time, action }) {

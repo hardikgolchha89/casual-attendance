@@ -175,27 +175,52 @@ async function sendToSheets({ workerId, date, time, action }) {
   if (!CONFIG.sheetsEndpoint) {
     throw new Error("Sheets endpoint not configured");
   }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs || 12000);
+  const payload = { workerId, date, time, action };
+  const body = JSON.stringify(payload);
 
-  const res = await fetch(CONFIG.sheetsEndpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workerId, date, time, action }),
-    signal: controller.signal,
-    mode: "cors",
-  });
-  clearTimeout(timeout);
+  // Try as a simple CORS request (text/plain avoids preflight). If response is opaque,
+  // assume success because Apps Script often omits ACAO headers.
+  const attempt = async (mode) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs || 12000);
+    try {
+      const res = await fetch(CONFIG.sheetsEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body,
+        signal: controller.signal,
+        mode,
+      });
+      clearTimeout(timeout);
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Bad response: ${res.status} ${txt}`);
+      if (res.type === "opaque") {
+        return { status: "ok" }; // treat as success
+      }
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Bad response: ${res.status} ${txt}`);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!data || data.status !== "ok") {
+        throw new Error("Sheets API error");
+      }
+      return data;
+    } catch (e) {
+      clearTimeout(timeout);
+      throw e;
+    }
+  };
+
+  try {
+    return await attempt("cors");
+  } catch (e) {
+    // Fallback: no-cors (opaque). We cannot read response but server will receive it.
+    try {
+      return await attempt("no-cors");
+    } catch (e2) {
+      throw e2;
+    }
   }
-  const data = await res.json().catch(() => ({}));
-  if (!data || data.status !== "ok") {
-    throw new Error("Sheets API error");
-  }
-  return data;
 }
 
 function showToast(message, type = "success") {

@@ -17,7 +17,11 @@ let availableCameras = [];
 let currentCameraId = null;
 
 const LAST_CAMERA_KEY = "attendance:lastCameraId";
-const HTML5_QRCODE_CDN = "https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js";
+const HTML5_QRCODE_CDNS = [
+  "https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js",
+  "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.10/html5-qrcode.min.js"
+];
 
 function ensureHtml5QrcodeLoaded() {
   return new Promise((resolve, reject) => {
@@ -25,20 +29,30 @@ function ensureHtml5QrcodeLoaded() {
       if (typeof window !== "undefined" && window.Html5Qrcode) {
         return resolve();
       }
-      // Check if a loading script already exists
-      const existing = document.querySelector("script[data-html5-qrcode]");
-      if (existing) {
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () => reject(new Error("Failed to load html5-qrcode")));
-        return;
-      }
-      const s = document.createElement("script");
-      s.src = HTML5_QRCODE_CDN;
-      s.async = true;
-      s.setAttribute("data-html5-qrcode", "");
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error("Failed to load html5-qrcode"));
-      document.head.appendChild(s);
+
+      const loadFrom = (index) => {
+        if (typeof window !== "undefined" && window.Html5Qrcode) {
+          return resolve();
+        }
+        if (index >= HTML5_QRCODE_CDNS.length) {
+          return reject(new Error("Failed to load html5-qrcode from all CDNs"));
+        }
+
+        // Reuse existing loader if already present for this URL
+        const currentSrc = HTML5_QRCODE_CDNS[index];
+        let existing = document.querySelector(`script[data-html5-qrcode][src='${currentSrc}']`);
+        if (!existing) {
+          existing = document.createElement("script");
+          existing.src = currentSrc;
+          existing.async = true;
+          existing.setAttribute("data-html5-qrcode", "");
+          document.head.appendChild(existing);
+        }
+        existing.onload = () => resolve();
+        existing.onerror = () => loadFrom(index + 1);
+      };
+
+      loadFrom(0);
     } catch (e) {
       reject(e);
     }
@@ -55,7 +69,7 @@ async function openScanner(actionLabel) {
     await setupCameraPicker();
   } catch (err) {
     console.error("Camera setup failed", err);
-    showToast("❌ Camera access failed. Check permissions.", "error");
+    showToast("❌ Camera library failed to load. Check connection or content blockers.", "error");
   }
   startScanner(currentCameraId);
 }

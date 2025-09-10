@@ -9,6 +9,7 @@ function getQueryParam(name) {
 }
 
 const manualEndpoint = (() => getQueryParam("endpoint"))();
+const defaultEndpoint = "https://script.google.com/macros/s/AKfycbwJ_3nYJX_ZzTAJRvtAy8l1TWV3t1m37Y2ECSfK7RFcijJOyOgBlzq-Gr-1bga25K3PEw/exec";
 const autoLocal = (() => {
   try {
     if (typeof window !== "undefined" && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)) {
@@ -21,6 +22,6 @@ const autoLocal = (() => {
 
 export const CONFIG = {
   // Priority: endpoint query param > localhost auto > static value
-  sheetsEndpoint: manualEndpoint || autoLocal || "",
+  sheetsEndpoint: manualEndpoint || autoLocal || defaultEndpoint,
   requestTimeoutMs: 12000
 };

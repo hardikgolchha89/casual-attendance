@@ -9,6 +9,12 @@ const modalCancelEl = document.getElementById("scanner-cancel");
 const modalTitleEl = document.getElementById("scanner-title");
 const toastContainer = document.getElementById("toast-container");
 const cameraSelectEl = document.getElementById("camera-select");
+// QR generator elements
+const qrGenNameEl = document.getElementById("qrgen-name");
+const qrGenIdEl = document.getElementById("qrgen-id");
+const qrGenBtnEl = document.getElementById("qrgen-generate");
+const qrGenDlBtnEl = document.getElementById("qrgen-download");
+const qrGenPreviewEl = document.getElementById("qrgen-preview");
 
 let html5QrCode = null;
 let isScanning = false;
@@ -247,3 +253,58 @@ window.addEventListener("keydown", (e) => {
     closeScanner();
   }
 });
+
+// ===== QR GENERATOR =====
+function sanitizeFileName(name) {
+  return String(name || "").trim().replace(/\s+/g, "-").replace(/[^-a-zA-Z0-9_.]/g, "").slice(0, 60) || "QR";
+}
+
+function generateQr() {
+  const name = (qrGenNameEl && qrGenNameEl.value) ? qrGenNameEl.value : "";
+  const id = (qrGenIdEl && qrGenIdEl.value) ? qrGenIdEl.value : "";
+  if (!id) {
+    showToast("Please enter Worker ID", "error");
+    return;
+  }
+  if (!qrGenPreviewEl) return;
+  qrGenPreviewEl.innerHTML = "";
+  // qrcodejs attaches to a container element
+  const size = 280;
+  /* global QRCode */
+  try {
+    // eslint-disable-next-line no-undef
+    const qrcode = new QRCode(qrGenPreviewEl, {
+      text: String(id),
+      width: size,
+      height: size,
+      correctLevel: QRCode.CorrectLevel.M,
+      margin: 2
+    });
+    // Enable download when canvas is ready
+    setTimeout(() => {
+      if (qrGenDlBtnEl) qrGenDlBtnEl.disabled = false;
+    }, 100);
+  } catch (err) {
+    console.error("QR generation failed", err);
+    showToast("QR generation failed", "error");
+  }
+}
+
+function downloadQrPng() {
+  if (!qrGenPreviewEl) return;
+  const canvas = qrGenPreviewEl.querySelector("canvas");
+  if (!canvas) {
+    showToast("Generate a QR first", "error");
+    return;
+  }
+  const name = sanitizeFileName(qrGenNameEl && qrGenNameEl.value);
+  const id = sanitizeFileName(qrGenIdEl && qrGenIdEl.value);
+  const filename = name ? `${name}_${id || "QR"}.png` : `${id || "QR"}.png`;
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+if (qrGenBtnEl) qrGenBtnEl.addEventListener("click", generateQr);
+if (qrGenDlBtnEl) qrGenDlBtnEl.addEventListener("click", downloadQrPng);

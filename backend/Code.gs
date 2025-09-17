@@ -10,7 +10,22 @@
  * 3) Copy the web app URL and set it in src/config.js as CONFIG.sheetsEndpoint
  */
 
+// Set your Google Sheet ID (from the sheet URL). If empty, the script
+// will try to use the active spreadsheet only when bound to a Sheet.
+var SHEET_ID = ""; // e.g. 1AbCdefGhIJkLmNoPqRsTuVwXyZ1234567890abcd
 var SHEET_NAME = "Attendance";
+
+function getOrCreateSheet_() {
+  var ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    throw new Error("Spreadsheet not found. Set SHEET_ID or bind script to a Sheet.");
+  }
+  var sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["WorkerID", "Date", "Time", "Action"]);
+  }
+  return sheet;
+}
 
 function doPost(e) {
   try {
@@ -28,13 +43,7 @@ function doPost(e) {
       return jsonResponse({ status: "error", message: "Missing fields" });
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
-
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["WorkerID", "Date", "Time", "Action"]);
-    }
-
+    var sheet = getOrCreateSheet_();
     sheet.appendRow([workerId, date, time, action]);
 
     return jsonResponse({ status: "ok" });

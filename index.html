@@ -22,6 +22,19 @@
           <button id="btn-checkin" class="btn btn--primary">Check In</button>
           <button id="btn-checkout" class="btn btn--secondary">Check Out</button>
         </div>
+
+        <section class="qrgen">
+          <h2 class="qrgen__title">Generate Worker QR</h2>
+          <div class="qrgen__form">
+            <input id="qrgen-name" class="input" type="text" placeholder="Worker name (e.g., John Doe)">
+            <input id="qrgen-id" class="input" type="text" placeholder="Worker ID (QR content, e.g., WORKER123)">
+            <div class="qrgen__actions">
+              <button id="qrgen-generate" class="btn btn--primary">Generate</button>
+              <button id="qrgen-download" class="btn btn--secondary" disabled>Download PNG</button>
+            </div>
+          </div>
+          <div id="qrgen-preview" class="qrgen__preview"></div>
+        </section>
       </main>
     </div>
 
@@ -48,6 +61,7 @@
     <!-- Toasts -->
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+    <script src="vendor/qrcode.min.js"></script>
     <script src="src/main.js" type="module"></script>
   </body>
   </html>

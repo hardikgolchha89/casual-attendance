@@ -15,6 +15,11 @@ const qrGenIdEl = document.getElementById("qrgen-id");
 const qrGenBtnEl = document.getElementById("qrgen-generate");
 const qrGenDlBtnEl = document.getElementById("qrgen-download");
 const qrGenPreviewEl = document.getElementById("qrgen-preview");
+// Tabs
+const tabScanBtn = document.getElementById("tab-scan");
+const tabGenBtn = document.getElementById("tab-generate");
+const sectionScan = document.getElementById("section-scan");
+const sectionGen = document.getElementById("section-generate");
 
 let html5QrCode = null;
 let isScanning = false;
@@ -308,3 +313,20 @@ function downloadQrPng() {
 
 if (qrGenBtnEl) qrGenBtnEl.addEventListener("click", generateQr);
 if (qrGenDlBtnEl) qrGenDlBtnEl.addEventListener("click", downloadQrPng);
+
+function activateTab(which) {
+  const isScan = which === "scan";
+  if (tabScanBtn && tabGenBtn) {
+    tabScanBtn.classList.toggle("is-active", isScan);
+    tabScanBtn.setAttribute("aria-selected", String(isScan));
+    tabGenBtn.classList.toggle("is-active", !isScan);
+    tabGenBtn.setAttribute("aria-selected", String(!isScan));
+  }
+  if (sectionScan && sectionGen) {
+    sectionScan.classList.toggle("is-active", isScan);
+    sectionGen.classList.toggle("is-active", !isScan);
+  }
+}
+
+if (tabScanBtn) tabScanBtn.addEventListener("click", () => activateTab("scan"));
+if (tabGenBtn) tabGenBtn.addEventListener("click", () => activateTab("generate"));

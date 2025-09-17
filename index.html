@@ -18,12 +18,22 @@
         <h1>Attendance Scanner</h1>
       </header>
       <main class="app__main">
-        <div class="actions">
-          <button id="btn-checkin" class="btn btn--primary">Check In</button>
-          <button id="btn-checkout" class="btn btn--secondary">Check Out</button>
-        </div>
+        <nav class="tabs" aria-label="Primary">
+          <div class="tabs__list" role="tablist">
+            <button class="tabs__btn is-active" role="tab" aria-selected="true" aria-controls="section-scan" id="tab-scan">Scan</button>
+            <button class="tabs__btn" role="tab" aria-selected="false" aria-controls="section-generate" id="tab-generate">Generate</button>
+          </div>
+        </nav>
 
-        <section class="qrgen">
+        <section id="section-scan" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-scan">
+          <div class="actions">
+            <button id="btn-checkin" class="btn btn--primary">Check In</button>
+            <button id="btn-checkout" class="btn btn--secondary">Check Out</button>
+          </div>
+        </section>
+
+        <section id="section-generate" class="tab-panel" role="tabpanel" aria-labelledby="tab-generate">
+          <div class="qrgen">
           <h2 class="qrgen__title">Generate Worker QR</h2>
           <div class="qrgen__form">
             <input id="qrgen-name" class="input" type="text" placeholder="Worker name (e.g., John Doe)">
@@ -34,6 +44,7 @@
             </div>
           </div>
           <div id="qrgen-preview" class="qrgen__preview"></div>
+          </div>
         </section>
       </main>
     </div>

@@ -154,8 +154,12 @@ async function setupCameraPicker() {
       opt.textContent = cam.label || cam.id;
       cameraSelectEl.appendChild(opt);
     });
-    // Choose last used or the first one
-    const selectedId = availableCameras.find(c => c.id === lastId) ? lastId : availableCameras[0].id;
+    // Choose last used, or a back/rear/environment camera if available, else first
+    let selectedId = availableCameras.find(c => c.id === lastId)?.id;
+    if (!selectedId) {
+      const backCam = availableCameras.find(c => /back|rear|environment|world/i.test(c.label || ""));
+      selectedId = backCam ? backCam.id : availableCameras[0].id;
+    }
     cameraSelectEl.value = selectedId;
     currentCameraId = selectedId;
   } else {

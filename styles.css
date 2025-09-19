@@ -54,6 +54,7 @@ body {
 /* Tabs */
 .tabs { width: 100%; max-width: 720px; margin: 0 auto; }
 .tabs__list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: rgba(255,255,255,0.04); padding: 6px; border-radius: 12px; border: 1px solid #263244; }
+.tabs__list { grid-template-columns: 1fr 1fr 1fr; }
 .tabs__btn { appearance: none; background: transparent; border: 0; padding: 12px 10px; border-radius: 10px; color: var(--muted); font-weight: 600; cursor: pointer; }
 .tabs__btn.is-active { color: var(--text); background: linear-gradient(180deg, #111827, #0b1220); border: 1px solid #263244; }
 .tab-panel { display: none; width: 100%; }
@@ -67,3 +68,29 @@ body {
 .input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #263244; background: #0b1220; color: var(--text); }
 .qrgen__actions { display: flex; gap: 10px; grid-column: 1 / -1; }
 .qrgen__preview { margin-top: 14px; display: grid; place-items: center; padding: 12px; background: #0b1220; border: 1px solid #263244; border-radius: 12px; }
+.
+.qrgen__label { margin-top: 8px; color: var(--muted); font-size: 14px; word-break: break-word; text-align: center; }
+/* Bulk textarea */
+.input--textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+/* Site control */
+.site-control { width: 100%; max-width: 520px; margin: 8px auto; display: grid; gap: 6px; }
+.site-control__label { font-size: 12px; color: var(--muted); }
+
+/* Analytics */
+.analytics { width: 100%; max-width: 720px; margin: 6px auto 0; display: grid; gap: 14px; }
+.analytics__title { margin: 0; font-size: 18px; font-weight: 600; }
+.analytics__kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.kpi { background: var(--card); border: 1px solid #263244; border-radius: 12px; padding: 12px; }
+.kpi__label { font-size: 12px; color: var(--muted); }
+.kpi__value { font-size: 22px; font-weight: 600; margin-top: 6px; }
+.analytics__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 720px) { .analytics__grid { grid-template-columns: 1fr 1fr; } }
+.card { background: var(--card); border: 1px solid #263244; border-radius: 12px; padding: 12px; }
+.card__title { font-weight: 600; margin-bottom: 8px; }
+.table { display: grid; gap: 6px; }
+.table__row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #0b1220; border: 1px solid #263244; border-radius: 10px; }
+.recent { display: grid; gap: 6px; }
+.recent__item { display: grid; gap: 2px; padding: 8px 10px; background: #0b1220; border: 1px solid #263244; border-radius: 10px; }
+.recent__meta { font-size: 12px; color: var(--muted); }
+.analytics__actions { display: flex; justify-content: flex-end; }

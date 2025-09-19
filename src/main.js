@@ -11,21 +11,34 @@ const toastContainer = document.getElementById("toast-container");
 const cameraSelectEl = document.getElementById("camera-select");
 // QR generator elements
 const qrGenNameEl = document.getElementById("qrgen-name");
-const qrGenIdEl = document.getElementById("qrgen-id");
+const qrGenLocationEl = document.getElementById("qrgen-location");
 const qrGenBtnEl = document.getElementById("qrgen-generate");
 const qrGenDlBtnEl = document.getElementById("qrgen-download");
 const qrGenPreviewEl = document.getElementById("qrgen-preview");
+// Bulk generator elements
+const bulkFileEl = document.getElementById("bulk-file");
+const bulkTextEl = document.getElementById("bulk-text");
+const bulkGenBtnEl = document.getElementById("bulk-generate");
+// Site selector
+const siteInputEl = document.getElementById("site-input");
+const SITE_KEY = "attendance:site";
 // Tabs
 const tabScanBtn = document.getElementById("tab-scan");
 const tabGenBtn = document.getElementById("tab-generate");
 const sectionScan = document.getElementById("section-scan");
 const sectionGen = document.getElementById("section-generate");
+const tabAnalyticsBtn = document.getElementById("tab-analytics");
+const sectionAnalytics = document.getElementById("section-analytics");
 
 let html5QrCode = null;
 let isScanning = false;
 let currentAction = null; // "Check In" | "Check Out"
 let availableCameras = [];
 let currentCameraId = null;
+// Generation rate limiting
+const GENERATE_COOLDOWN_MS = 3000; // 3 seconds
+let lastSingleGenerateAt = 0;
+let lastBulkGenerateAt = 0;
 
 const LAST_CAMERA_KEY = "attendance:lastCameraId";
 function ensureHtml5QrcodeLoaded() {
@@ -71,7 +84,19 @@ function closeScanner() {
 
 function startScanner(cameraId) {
   const qrRegionId = "qr-reader";
-  const config = { fps: 10, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, rememberLastUsedCamera: true };
+  // Prefer faster detection settings where supported
+  const config = { fps: 15, qrbox: { width: 300, height: 300 }, aspectRatio: 1.0, rememberLastUsedCamera: true };
+  try {
+    // Limit to QR only if the enum exists
+    // eslint-disable-next-line no-undef
+    if (typeof Html5QrcodeSupportedFormats !== "undefined" && Html5QrcodeSupportedFormats.QR_CODE) {
+      // eslint-disable-next-line no-undef
+      config.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
+    }
+  } catch (_) {
+    // ignore if not available
+  }
+  config.experimentalFeatures = { useBarCodeDetectorIfSupported: true };
   html5QrCode = new Html5Qrcode(qrRegionId);
   isScanning = true;
 
@@ -80,7 +105,7 @@ function startScanner(cameraId) {
   html5QrCode.start(
     cameraConfig,
     config,
-    async (decodedText) => {
+    (decodedText) => {
       if (!decodedText) return;
       // Stop scanning immediately to prevent multiple reads
       stopScanner();
@@ -97,15 +122,18 @@ function startScanner(cameraId) {
         action: currentAction,
       };
 
-      try {
-        await sendToSheets(payload);
-        showToast(`✅ ${currentAction === "Check In" ? "Checked In" : "Checked Out"}`, "success");
-      } catch (err) {
-        console.error(err);
-        showToast("❌ Scan failed, please try again.", "error");
-      } finally {
-        closeScanner();
-      }
+      // Close UI immediately for responsiveness
+      closeScanner();
+      showToast("✅ Scanned, saving...", "success");
+      // Send in background and report result
+      sendToSheets(payload)
+        .then(() => {
+          showToast(`✅ ${currentAction === "Check In" ? "Checked In" : "Checked Out"}`, "success");
+        })
+        .catch((err) => {
+          console.error(err);
+          showToast("❌ Save failed, please retry.", "error");
+        });
     },
     (errorMessage) => {
       // Ignore continuous scan errors
@@ -190,7 +218,8 @@ async function sendToSheets({ workerId, date, time, action }) {
   if (!CONFIG.sheetsEndpoint) {
     throw new Error("Sheets endpoint not configured");
   }
-  const payload = { workerId, date, time, action };
+  const site = siteInputEl ? String(siteInputEl.value || "").trim() : "";
+  const payload = { workerId, date, time, action, site };
   const body = JSON.stringify(payload);
 
   // Try as a simple CORS request (text/plain avoids preflight). If response is opaque,
@@ -269,10 +298,16 @@ function sanitizeFileName(name) {
 }
 
 function generateQr() {
-  const name = (qrGenNameEl && qrGenNameEl.value) ? qrGenNameEl.value : "";
-  const id = (qrGenIdEl && qrGenIdEl.value) ? qrGenIdEl.value : "";
-  if (!id) {
-    showToast("Please enter Worker ID", "error");
+  const now = Date.now();
+  if (now - lastSingleGenerateAt < GENERATE_COOLDOWN_MS) {
+    const waitMs = GENERATE_COOLDOWN_MS - (now - lastSingleGenerateAt);
+    showToast(`Please wait ${Math.ceil(waitMs / 1000)}s before generating again`, "error");
+    return;
+  }
+  const name = (qrGenNameEl && qrGenNameEl.value) ? qrGenNameEl.value.trim() : "";
+  const location = (qrGenLocationEl && qrGenLocationEl.value) ? qrGenLocationEl.value.trim() : "";
+  if (!name) {
+    showToast("Please enter Name", "error");
     return;
   }
   if (!qrGenPreviewEl) return;
@@ -283,7 +318,8 @@ function generateQr() {
   try {
     // eslint-disable-next-line no-undef
     const qrcode = new QRCode(qrGenPreviewEl, {
-      text: String(id),
+      // Encode Name_Location so WorkerID becomes Name_Location when scanned
+      text: location ? `${name}_${location}` : String(name),
       width: size,
       height: size,
       correctLevel: QRCode.CorrectLevel.M,
@@ -292,7 +328,17 @@ function generateQr() {
     // Enable download when canvas is ready
     setTimeout(() => {
       if (qrGenDlBtnEl) qrGenDlBtnEl.disabled = false;
+      // Add preview label under the QR
+      const label = document.createElement("div");
+      label.className = "qrgen__label";
+      label.textContent = location ? `${name}_${location}` : String(name);
+      qrGenPreviewEl.appendChild(label);
     }, 100);
+    lastSingleGenerateAt = now;
+    if (qrGenBtnEl) {
+      qrGenBtnEl.disabled = true;
+      setTimeout(() => { if (qrGenBtnEl) qrGenBtnEl.disabled = false; }, GENERATE_COOLDOWN_MS);
+    }
   } catch (err) {
     console.error("QR generation failed", err);
     showToast("QR generation failed", "error");
@@ -307,8 +353,9 @@ function downloadQrPng() {
     return;
   }
   const name = sanitizeFileName(qrGenNameEl && qrGenNameEl.value);
-  const id = sanitizeFileName(qrGenIdEl && qrGenIdEl.value);
-  const filename = name ? `${name}_${id || "QR"}.png` : `${id || "QR"}.png`;
+  const location = sanitizeFileName(qrGenLocationEl && qrGenLocationEl.value);
+  const base = [name, location].filter(Boolean).join("_") || "QR";
+  const filename = `${base}.png`;
   const link = document.createElement("a");
   link.download = filename;
   link.href = canvas.toDataURL("image/png");
@@ -318,19 +365,251 @@ function downloadQrPng() {
 if (qrGenBtnEl) qrGenBtnEl.addEventListener("click", generateQr);
 if (qrGenDlBtnEl) qrGenDlBtnEl.addEventListener("click", downloadQrPng);
 
-function activateTab(which) {
-  const isScan = which === "scan";
-  if (tabScanBtn && tabGenBtn) {
-    tabScanBtn.classList.toggle("is-active", isScan);
-    tabScanBtn.setAttribute("aria-selected", String(isScan));
-    tabGenBtn.classList.toggle("is-active", !isScan);
-    tabGenBtn.setAttribute("aria-selected", String(!isScan));
+// ===== BULK QR GENERATOR =====
+function parseBulkText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  if (!lines.length) return [];
+  const results = [];
+  const header = lines[0].toLowerCase();
+  const hasHeader = /name/.test(header) && /location/.test(header);
+  const rows = hasHeader ? lines.slice(1) : lines;
+  for (const line of rows) {
+    const delimiter = line.includes("\t") ? "\t" : ",";
+    const parts = line.split(delimiter).map(s => s.trim());
+    const name = parts[0] || "";
+    const location = parts[1] || "";
+    if (!name) continue;
+    results.push({ name, location });
   }
-  if (sectionScan && sectionGen) {
-    sectionScan.classList.toggle("is-active", isScan);
-    sectionGen.classList.toggle("is-active", !isScan);
+  return results;
+}
+
+async function generateQrDataUrl(text, size) {
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  document.body.appendChild(container);
+  try {
+    // eslint-disable-next-line no-undef
+    const qr = new QRCode(container, {
+      text: String(text),
+      width: size,
+      height: size,
+      correctLevel: QRCode.CorrectLevel.M,
+      margin: 2
+    });
+    // Wait up to ~500ms for canvas/img to appear
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const canvas = container.querySelector("canvas");
+      if (canvas) return canvas.toDataURL("image/png");
+      const img = container.querySelector("img");
+      if (img && img.src) return img.src;
+      await new Promise(r => setTimeout(r, 40));
+    }
+    return null;
+  } catch (e) {
+    return null;
+  } finally {
+    container.remove();
+  }
+}
+
+async function generateZipFromPairs(pairs) {
+  if (!pairs || !pairs.length) {
+    showToast("No valid rows found", "error");
+    return;
+  }
+  if (!window.JSZip || !window.saveAs) {
+    showToast("ZIP libraries failed to load", "error");
+    return;
+  }
+  const zip = new window.JSZip();
+  const size = 512;
+  let added = 0;
+  for (const { name, location } of pairs) {
+    const content = location ? `${String(name).trim()}_${String(location).trim()}` : String(name).trim();
+    if (!content) continue;
+    const dataUrl = await generateQrDataUrl(content, size);
+    if (!dataUrl) continue;
+    const base64 = dataUrl.split(",")[1];
+    const fileBase = [sanitizeFileName(name), sanitizeFileName(location)].filter(Boolean).join("_") || "QR";
+    zip.file(`${fileBase}.png`, base64, { base64: true });
+    added++;
+  }
+  if (!added) {
+    showToast("Nothing to add to ZIP", "error");
+    return;
+  }
+  const blob = await zip.generateAsync({ type: "blob" });
+  // eslint-disable-next-line no-undef
+  window.saveAs(blob, `qr-codes-${Date.now()}.zip`);
+  showToast(`✅ Generated ${added} QR(s)`, "success");
+}
+
+async function handleBulkGenerate() {
+  const now = Date.now();
+  if (now - lastBulkGenerateAt < GENERATE_COOLDOWN_MS) {
+    const waitMs = GENERATE_COOLDOWN_MS - (now - lastBulkGenerateAt);
+    showToast(`Please wait ${Math.ceil(waitMs / 1000)}s before generating again`, "error");
+    return;
+  }
+  if (bulkGenBtnEl) bulkGenBtnEl.disabled = true;
+  try {
+    // Prefer file content if provided; else use textarea
+    let text = bulkTextEl && bulkTextEl.value ? String(bulkTextEl.value) : "";
+    const file = bulkFileEl && bulkFileEl.files && bulkFileEl.files[0] ? bulkFileEl.files[0] : null;
+    if (file) {
+      try {
+        text = await file.text();
+      } catch (e) {
+        showToast("Failed to read file", "error");
+      }
+    }
+    if (!text.trim()) {
+      showToast("Provide a CSV/TSV or paste rows", "error");
+      return;
+    }
+    const pairs = parseBulkText(text);
+    await generateZipFromPairs(pairs);
+    lastBulkGenerateAt = now;
+  } finally {
+    if (bulkGenBtnEl) {
+      const elapsed = Date.now() - now;
+      const remaining = Math.max(0, GENERATE_COOLDOWN_MS - elapsed);
+      setTimeout(() => { if (bulkGenBtnEl) bulkGenBtnEl.disabled = false; }, remaining);
+    }
+  }
+}
+
+if (bulkGenBtnEl) bulkGenBtnEl.addEventListener("click", handleBulkGenerate);
+if (bulkFileEl && bulkTextEl) {
+  bulkFileEl.addEventListener("change", async () => {
+    const file = bulkFileEl.files && bulkFileEl.files[0] ? bulkFileEl.files[0] : null;
+    if (!file) return;
+    try {
+      const text = await file.text();
+      if (text && !bulkTextEl.value) bulkTextEl.value = text;
+    } catch {
+      // ignore
+    }
+  });
+}
+
+// ===== Site persistence =====
+if (siteInputEl) {
+  const saved = localStorage.getItem(SITE_KEY);
+  if (saved) siteInputEl.value = saved;
+  siteInputEl.addEventListener("input", () => {
+    localStorage.setItem(SITE_KEY, String(siteInputEl.value || ""));
+  });
+}
+
+// ===== Analytics =====
+async function fetchStatsJSONP(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = `jsonp_cb_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+    window[cbName] = (data) => {
+      resolve(data);
+      setTimeout(() => { try { delete window[cbName]; } catch(_){} }, 0);
+      script.remove();
+    };
+    const sep = url.includes("?") ? "&" : "?";
+    const script = document.createElement("script");
+    script.src = `${url}${sep}action=stats&callback=${cbName}`;
+    script.onerror = () => { reject(new Error("Stats load failed")); script.remove(); delete window[cbName]; };
+    document.body.appendChild(script);
+  });
+}
+
+function renderStats(data) {
+  try {
+    const insEl = document.getElementById("kpi-ins");
+    const outsEl = document.getElementById("kpi-outs");
+    const totalEl = document.getElementById("kpi-total");
+    if (insEl) insEl.textContent = String(data?.today?.checkIns || 0);
+    if (outsEl) outsEl.textContent = String(data?.today?.checkOuts || 0);
+    if (totalEl) totalEl.textContent = String(data?.today?.total || 0);
+
+    const locTodayEl = document.getElementById("table-loc-today");
+    const loc7dEl = document.getElementById("table-loc-7d");
+    const recentEl = document.getElementById("recent-list");
+    if (locTodayEl) {
+      locTodayEl.innerHTML = "";
+      const entries = Object.entries(data?.byLocationToday || {}).sort((a,b) => b[1]-a[1]);
+      if (!entries.length) locTodayEl.textContent = "No data";
+      entries.forEach(([loc, count]) => {
+        const row = document.createElement("div");
+        row.className = "table__row";
+        row.innerHTML = `<div>${loc || "(blank)"}</div><div>${count}</div>`;
+        locTodayEl.appendChild(row);
+      });
+    }
+    if (loc7dEl) {
+      loc7dEl.innerHTML = "";
+      const entries7 = Object.entries(data?.byLocation7d || {}).sort((a,b) => b[1]-a[1]);
+      if (!entries7.length) loc7dEl.textContent = "No data";
+      entries7.forEach(([loc, count]) => {
+        const row = document.createElement("div");
+        row.className = "table__row";
+        row.innerHTML = `<div>${loc || "(blank)"}</div><div>${count}</div>`;
+        loc7dEl.appendChild(row);
+      });
+    }
+    if (recentEl) {
+      recentEl.innerHTML = "";
+      const items = Array.isArray(data?.recent) ? data.recent : [];
+      if (!items.length) recentEl.textContent = "No recent scans";
+      items.forEach((it) => {
+        const div = document.createElement("div");
+        div.className = "recent__item";
+        const who = it.workerName || it.workerId || "";
+        div.innerHTML = `<div>${who} — ${it.action}</div><div class="recent__meta">${it.date} ${it.time} ${it.location ? "• "+it.location : ""}${it.site ? " • "+it.site : ""}</div>`;
+        recentEl.appendChild(div);
+      });
+    }
+  } catch (e) {
+    // ignore rendering errors
+  }
+}
+
+async function fetchAndRenderStats() {
+  try {
+    const url = CONFIG.sheetsEndpoint;
+    if (!url) return;
+    const data = await fetchStatsJSONP(url);
+    if (data && data.status === "ok") {
+      renderStats(data);
+    } else {
+      showToast("Failed to load stats", "error");
+    }
+  } catch (e) {
+    showToast("Failed to load stats", "error");
+  }
+}
+
+const btnRefreshStats = document.getElementById("btn-refresh-stats");
+if (btnRefreshStats) btnRefreshStats.addEventListener("click", fetchAndRenderStats);
+function activateTab(which) {
+  const panels = [
+    { btn: tabScanBtn, panel: sectionScan, key: "scan" },
+    { btn: tabGenBtn, panel: sectionGen, key: "generate" },
+    { btn: tabAnalyticsBtn, panel: sectionAnalytics, key: "analytics" }
+  ];
+  panels.forEach(({ btn, panel, key }) => {
+    const active = which === key;
+    if (btn) {
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", String(active));
+    }
+    if (panel) panel.classList.toggle("is-active", active);
+  });
+  if (which === "analytics") {
+    fetchAndRenderStats();
   }
 }
 
 if (tabScanBtn) tabScanBtn.addEventListener("click", () => activateTab("scan"));
 if (tabGenBtn) tabGenBtn.addEventListener("click", () => activateTab("generate"));
+if (tabAnalyticsBtn) tabAnalyticsBtn.addEventListener("click", () => activateTab("analytics"));

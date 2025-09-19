@@ -22,10 +22,15 @@
           <div class="tabs__list" role="tablist">
             <button class="tabs__btn is-active" role="tab" aria-selected="true" aria-controls="section-scan" id="tab-scan">Scan</button>
             <button class="tabs__btn" role="tab" aria-selected="false" aria-controls="section-generate" id="tab-generate">Generate</button>
+            <button class="tabs__btn" role="tab" aria-selected="false" aria-controls="section-analytics" id="tab-analytics">Analytics</button>
           </div>
         </nav>
 
         <section id="section-scan" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-scan">
+          <div class="site-control">
+            <label for="site-input" class="site-control__label">Site (optional)</label>
+            <input id="site-input" class="input" type="text" placeholder="e.g., Site A">
+          </div>
           <div class="actions">
             <button id="btn-checkin" class="btn btn--primary">Check In</button>
             <button id="btn-checkout" class="btn btn--secondary">Check Out</button>
@@ -34,16 +39,57 @@
 
         <section id="section-generate" class="tab-panel" role="tabpanel" aria-labelledby="tab-generate">
           <div class="qrgen">
-          <h2 class="qrgen__title">Generate Worker QR</h2>
+          <h2 class="qrgen__title">Quick QR Generator</h2>
           <div class="qrgen__form">
-            <input id="qrgen-name" class="input" type="text" placeholder="Worker name (e.g., John Doe)">
-            <input id="qrgen-id" class="input" type="text" placeholder="Worker ID (QR content, e.g., WORKER123)">
+            <input id="qrgen-name" class="input" type="text" placeholder="Name (e.g., John Doe)">
+            <input id="qrgen-location" class="input" type="text" placeholder="Location (e.g., Site A)">
             <div class="qrgen__actions">
               <button id="qrgen-generate" class="btn btn--primary">Generate</button>
               <button id="qrgen-download" class="btn btn--secondary" disabled>Download PNG</button>
             </div>
           </div>
           <div id="qrgen-preview" class="qrgen__preview"></div>
+          </div>
+
+          <div class="qrgen">
+          <h2 class="qrgen__title">Bulk QR Generator</h2>
+          <div class="qrgen__form">
+            <input id="bulk-file" class="input" type="file" accept=".csv,.tsv,.txt">
+            <textarea id="bulk-text" class="input input--textarea" placeholder="Name,Location\nAlice,Site A\nBob,Site B\nCharlie,Site C"></textarea>
+            <div class="qrgen__actions">
+              <button id="bulk-generate" class="btn btn--primary">Generate ZIP</button>
+            </div>
+          </div>
+          </div>
+        </section>
+
+        <section id="section-analytics" class="tab-panel" role="tabpanel" aria-labelledby="tab-analytics">
+          <div class="analytics">
+            <h2 class="analytics__title">Today</h2>
+            <div class="analytics__kpis">
+              <div class="kpi"><div class="kpi__label">Check-ins</div><div class="kpi__value" id="kpi-ins">0</div></div>
+              <div class="kpi"><div class="kpi__label">Check-outs</div><div class="kpi__value" id="kpi-outs">0</div></div>
+              <div class="kpi"><div class="kpi__label">Total</div><div class="kpi__value" id="kpi-total">0</div></div>
+            </div>
+
+            <div class="analytics__grid">
+              <div class="card">
+                <div class="card__title">By Location (Today)</div>
+                <div id="table-loc-today" class="table"></div>
+              </div>
+              <div class="card">
+                <div class="card__title">By Location (Last 7 Days)</div>
+                <div id="table-loc-7d" class="table"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card__title">Recent Scans</div>
+              <div id="recent-list" class="recent"></div>
+            </div>
+            <div class="analytics__actions">
+              <button id="btn-refresh-stats" class="btn btn--ghost">Refresh</button>
+            </div>
           </div>
         </section>
       </main>
@@ -73,6 +119,8 @@
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
     <script src="vendor/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="src/main.js" type="module"></script>
   </body>
   </html>

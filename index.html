@@ -108,6 +108,13 @@
             <label for="camera-select" class="camera-picker__label">Camera</label>
             <select id="camera-select" class="camera-picker__select"></select>
           </div>
+          <div class="camera-controls">
+            <button id="torch-toggle" class="btn btn--ghost camera-controls__btn" aria-pressed="false">Torch</button>
+            <div id="zoom-group" class="camera-controls__zoom">
+              <label for="zoom-range" class="camera-controls__label">Zoom</label>
+              <input id="zoom-range" type="range" min="1" max="1" step="0.1" value="1" />
+            </div>
+          </div>
           <div id="qr-reader"></div>
           <div class="modal__hint">Point your camera at the worker ID QR code.</div>
           <button id="scanner-cancel" class="btn btn--ghost">Cancel</button>

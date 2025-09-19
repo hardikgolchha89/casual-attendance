@@ -35,6 +35,7 @@ let isScanning = false;
 let currentAction = null; // "Check In" | "Check Out"
 let availableCameras = [];
 let currentCameraId = null;
+let wakeLock = null;
 // Generation rate limiting
 const GENERATE_COOLDOWN_MS = 3000; // 3 seconds
 let lastSingleGenerateAt = 0;
@@ -99,6 +100,7 @@ function startScanner(cameraId) {
   config.experimentalFeatures = { useBarCodeDetectorIfSupported: true };
   html5QrCode = new Html5Qrcode(qrRegionId);
   isScanning = true;
+  acquireWakeLock();
 
   const cameraConfig = cameraId ? cameraId : { facingMode: "environment" };
 
@@ -162,6 +164,7 @@ function stopScanner() {
   }).catch(() => {
     // no-op
   });
+  releaseWakeLock();
 }
 
 async function setupCameraPicker() {
@@ -322,7 +325,7 @@ function generateQr() {
       text: location ? `${name}_${location}` : String(name),
       width: size,
       height: size,
-      correctLevel: QRCode.CorrectLevel.M,
+      correctLevel: QRCode.CorrectLevel.L,
       margin: 2
     });
     // Enable download when canvas is ready
@@ -397,7 +400,7 @@ async function generateQrDataUrl(text, size) {
       text: String(text),
       width: size,
       height: size,
-      correctLevel: QRCode.CorrectLevel.M,
+      correctLevel: QRCode.CorrectLevel.L,
       margin: 2
     });
     // Wait up to ~500ms for canvas/img to appear
@@ -497,6 +500,37 @@ if (bulkFileEl && bulkTextEl) {
   });
 }
 
+// ===== Wake Lock (keep screen on while scanning) =====
+async function acquireWakeLock() {
+  try {
+    if (document.visibilityState !== "visible") return;
+    if ("wakeLock" in navigator && navigator.wakeLock.request) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { /* released */ });
+    }
+  } catch (_) {
+    // ignore
+  }
+}
+
+async function releaseWakeLock() {
+  try {
+    if (wakeLock) { await wakeLock.release(); }
+  } catch (_) {
+    // ignore
+  } finally {
+    wakeLock = null;
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && isScanning) {
+    acquireWakeLock();
+  } else {
+    releaseWakeLock();
+  }
+});
+
 // ===== Site persistence =====
 if (siteInputEl) {
   const saved = localStorage.getItem(SITE_KEY);
@@ -510,7 +544,9 @@ if (siteInputEl) {
 async function fetchStatsJSONP(url) {
   return new Promise((resolve, reject) => {
     const cbName = `jsonp_cb_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+    let timeoutId = null;
     window[cbName] = (data) => {
+      if (timeoutId) clearTimeout(timeoutId);
       resolve(data);
       setTimeout(() => { try { delete window[cbName]; } catch(_){} }, 0);
       script.remove();
@@ -520,6 +556,12 @@ async function fetchStatsJSONP(url) {
     script.src = `${url}${sep}action=stats&callback=${cbName}`;
     script.onerror = () => { reject(new Error("Stats load failed")); script.remove(); delete window[cbName]; };
     document.body.appendChild(script);
+    // Fail fast if callback never fires (e.g., endpoint doesn't support JSONP)
+    timeoutId = setTimeout(() => {
+      try { delete window[cbName]; } catch(_){}
+      try { script.remove(); } catch(_){}
+      reject(new Error("Stats request timed out"));
+    }, 6000);
   });
 }
 

@@ -43,6 +43,11 @@ body {
 .modal__hint { color: var(--muted); font-size: 14px; margin: 12px 0 8px; }
 #qr-reader { width: 100%; }
 
+.camera-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 12px; }
+.camera-controls__btn { padding: 8px 12px; border-radius: 10px; }
+.camera-controls__zoom { display: flex; align-items: center; gap: 8px; }
+.camera-controls__label { font-size: 12px; color: var(--muted); }
+
 .toast-container { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: grid; gap: 10px; z-index: 1000; }
 .toast { display: flex; align-items: center; gap: 8px; background: #0b1220; border: 1px solid #223049; color: var(--text); padding: 10px 14px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); opacity: 0; transform: translateY(8px); animation: toast-in 240ms ease forwards; }
 .toast--success { border-color: rgba(22,163,74,0.5); }

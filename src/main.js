@@ -1,4 +1,10 @@
 import { CONFIG } from "./config.js";
+// Register service worker for PWA
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 
 const btnCheckIn = document.getElementById("btn-checkin");
 const btnCheckOut = document.getElementById("btn-checkout");

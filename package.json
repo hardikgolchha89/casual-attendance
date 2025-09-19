@@ -1,0 +1,18 @@
+{
+  "name": "attendance-scanner",
+  "version": "1.0.0",
+  "description": "Lightweight web app to scan worker QR codes and log Check In/Check Out into Google Sheets.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor-community/barcode-scanner": "4.0.1",
+    "@capacitor/android": "5.7.8",
+    "@capacitor/cli": "5.7.8",
+    "@capacitor/core": "5.7.8"
+  }
+}

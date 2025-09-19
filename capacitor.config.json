@@ -1,0 +1,8 @@
+{
+  "appId": "com.example.attendance",
+  "appName": "attendance-scanner",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

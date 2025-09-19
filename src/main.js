@@ -36,6 +36,7 @@ let currentAction = null; // "Check In" | "Check Out"
 let availableCameras = [];
 let currentCameraId = null;
 let wakeLock = null;
+const isCapacitor = typeof window !== "undefined" && !!window.Capacitor && !!window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
 // Generation rate limiting
 const GENERATE_COOLDOWN_MS = 3000; // 3 seconds
 let lastSingleGenerateAt = 0;
@@ -65,6 +66,15 @@ async function openScanner(actionLabel) {
   currentAction = actionLabel;
   modalTitleEl.textContent = `Scan QR — ${actionLabel}`;
   modalEl.setAttribute("aria-hidden", "false");
+  if (isCapacitor) {
+    try {
+      await scanWithNativeScanner();
+      return;
+    } catch (e) {
+      console.error("Native scan failed, falling back to web", e);
+      // fall through to web scanner
+    }
+  }
   try {
     await ensureHtml5QrcodeLoaded();
     await setupCameraPicker();
@@ -165,6 +175,46 @@ function stopScanner() {
     // no-op
   });
   releaseWakeLock();
+}
+
+// ===== Native scanner (Capacitor) =====
+async function scanWithNativeScanner() {
+  // Dynamically import the plugin if available
+  const cap = window.Capacitor;
+  if (!cap) throw new Error("Capacitor not available");
+  const plugin = cap.Plugins && (cap.Plugins.BarcodeScanner || cap.Plugins.BarcodeScannerPlugin);
+  if (!plugin) throw new Error("BarcodeScanner plugin not available");
+
+  // Configure and request permission
+  if (plugin.prepare) {
+    await plugin.prepare();
+  }
+  if (plugin.checkPermission) {
+    const perm = await plugin.checkPermission({ force: true });
+    if (!perm.granted) throw new Error("Camera permission not granted");
+  }
+
+  // Hide the webview background for better performance
+  if (plugin.hideBackground) await plugin.hideBackground();
+  try {
+    const result = await plugin.startScan({ targetedFormats: ["QR_CODE"] });
+    if (!result || !result.hasContent) throw new Error("No content");
+    const decodedText = String(result.content || "").trim();
+    if (!decodedText) throw new Error("Empty content");
+
+    const now = new Date();
+    const iso = now.toISOString();
+    const dateStr = iso.slice(0, 10);
+    const timeStr = now.toLocaleTimeString([], { hour12: false });
+    const payload = { workerId: decodedText, date: dateStr, time: timeStr, action: currentAction };
+    closeScanner();
+    showToast("✅ Scanned, saving...", "success");
+    await sendToSheets(payload);
+    showToast(`✅ ${currentAction === "Check In" ? "Checked In" : "Checked Out"}`, "success");
+  } finally {
+    if (plugin.showBackground) await plugin.showBackground();
+    if (plugin.stopScan) await plugin.stopScan();
+  }
 }
 
 async function setupCameraPicker() {
